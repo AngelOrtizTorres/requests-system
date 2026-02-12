@@ -1,41 +1,83 @@
-FROM php:8.2-apache
+# Multi-stage build for Render deployment
+FROM node:20-alpine AS node-build
 
-# Instalar dependencias del sistema + Node.js
-RUN apt-get update && apt-get install -y \
-    git curl libpng-dev libjpeg-dev libfreetype6-dev \
-    libonig-dev libxml2-dev libpq-dev zip unzip \
-    nodejs npm \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+# Copy package files first for better caching
+COPY package*.json ./
+# Install dependencies
+RUN npm ci
+# Copy Vite config and source files
+COPY vite.config.js ./
+COPY resources/ resources/
+# Build assets with Vite
+RUN npm run build
 
-# Extensiones PHP (PostgreSQL)
+# Main PHP image with Nginx
+FROM php:8.2-fpm-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    nginx \
+    supervisor \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    postgresql-dev \
+    oniguruma-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    git \
+    curl
+
+# Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg && \
-    docker-php-ext-install -j$(nproc) gd pdo pdo_pgsql mbstring exif pcntl bcmath
+    docker-php-ext-install -j$(nproc) \
+    gd \
+    pdo \
+    pdo_pgsql \
+    mbstring \
+    exif \
+    pcntl \
+    bcmath \
+    opcache
 
-# Composer
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Configurar Apache
-RUN a2enmod rewrite
-COPY docker/000-default.conf /etc/apache2/sites-available/000-default.conf
-
+# Set working directory
 WORKDIR /var/www/html
 
-# Copiar proyecto
+# Copy application files
 COPY . .
+COPY --from=node-build /app/public/build ./public/build
 
-# Dependencias
-RUN composer install --no-dev --optimize-autoloader && \
-    npm install && npm run build
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Permisos
-RUN chown -R www-data:www-data /var/www/html && \
-    chmod -R 775 storage bootstrap/cache
+# Configure Nginx
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY docker/default.conf /etc/nginx/http.d/default.conf
 
-# Entry point
+# Configure PHP-FPM
+RUN echo "listen = /var/run/php-fpm.sock" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "listen.owner = nginx" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "listen.group = nginx" >> /usr/local/etc/php-fpm.d/www.conf
+
+# Configure Supervisor
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Create necessary directories and set permissions
+RUN mkdir -p /var/log/supervisor /var/run/nginx && \
+    chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && \
+    chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Copy entrypoint script
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 80
+# Expose port (Render will override this with $PORT)
+EXPOSE 3000
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["apache2-foreground"]
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

@@ -19,3 +19,29 @@ bootstrap/cache/*
 !storage/app/.gitignore
 !storage/framework/.gitignore
 !bootstrap/cache/.gitignore
+
+# IDE and development tools
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+public/hot
+public/mix-manifest.json
+public/storage
+
+# Logs
+*.log
+npm-debug.log
+yarn-error.log
+
+# Docker files
+render.yaml
+
+# Cache files
+.phpunit.result.cache

@@ -1,0 +1,66 @@
+services:
+  - type: web
+    name: requests-system
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    buildCommand: ""
+    startCommand: ""
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: APP_NAME
+        value: "Requests System"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_URL
+        fromService:
+          type: web
+          name: requests-system
+          property: host
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_STDERR_FORMATTER
+        value: Monolog\Formatter\JsonFormatter
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_DRIVER
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: requests-system-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: requests-system-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: requests-system-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: requests-system-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: requests-system-db
+          property: password
+      - key: DATABASE_URL
+        fromDatabase:
+          name: requests-system-db
+          property: connectionString
+
+databases:
+  - name: requests-system-db
+    databaseName: requests_system
+    user: requests_user
+    plan: starter
+    region: oregon
