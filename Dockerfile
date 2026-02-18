@@ -28,8 +28,7 @@ RUN apk add --no-cache \
     zip \
     unzip \
     git \
-    curl \
-    su-exec
+    curl
 
 # Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg && \
@@ -53,16 +52,8 @@ WORKDIR /var/www/html
 COPY . .
 COPY --from=node-build /app/public/build ./public/build
 
-
-
-# Crear subdirectorios y archivos .gitignore requeridos por Laravel y asignar permisos
-RUN mkdir -p storage/framework storage/logs bootstrap/cache && \
-    touch storage/framework/.gitignore storage/logs/.gitignore bootstrap/cache/.gitignore && \
-    chown -R www-data:www-data storage bootstrap/cache && \
-    chmod -R 775 storage bootstrap/cache storage/framework storage/logs
-
-# Instalar dependencias PHP como www-data (sin scripts)
-RUN su-exec www-data composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Configure Nginx
 COPY docker/nginx.conf /etc/nginx/nginx.conf
